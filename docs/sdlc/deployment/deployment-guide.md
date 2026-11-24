@@ -15,7 +15,17 @@ Pushes to `main` run `.github/workflows/deploy.yml`, which builds the API image 
 <!-- sdlc:auto:end environments -->
 
 <!-- sdlc:auto:start live -->
-_Not deployed yet._
+**Frontend URL:** https://p92f4557adfa1.d3j61xaup4zgrx.amplifyapp.com
+
+**Backend URL:** https://44-253-241-182.sslip.io/apps/92f4557adfa1/
+
+**Database:** PostgreSQL · app
+
+**Version:** 413615fa83de
+
+**Commit:** `413615f`
+
+**Finished:** 2026-11-24
 <!-- sdlc:auto:end live -->
 
 <!-- sdlc:auto:start topology -->
