@@ -17,6 +17,7 @@ from sqlalchemy import inspect
 
 from app import auth
 from app.database import DATABASE_URL, engine
+from app.routers import notes
 from app.seed import seed_from_env
 
 _ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
@@ -63,7 +64,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Quick notes",
-    description="Quick Notes is a small web app to keep short notes. A user can create a note with a title (required, max 100 characters) and text (max 2,000 characters). The user sees all notes in a list, newest first, with a message when there are no notes. The user can delete a note after confirming. The user can export all notes as one Markdown file; the file name is made from the date, and the number of exported notes is limited by a setting (default 100). No sign-in. Two sprints: sprint 1 is create and list, sprint 2 is delete and export.",
+    description=(
+        "Quick Notes is a small web app to keep short notes. A user can create a note "
+        "with a title (required, max 100 characters) and text (max 2,000 characters). "
+        "The user sees all notes in a list, newest first, with a message when there are "
+        "no notes. The user can delete a note after confirming. The user can export all "
+        "notes as one Markdown file; the file name is made from the date, and the number "
+        "of exported notes is limited by a setting (default 100). No sign-in. Two "
+        "sprints: sprint 1 is create and list, sprint 2 is delete and export."
+    ),
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -82,6 +91,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth.router)
+app.include_router(notes.router)
 
 
 @app.get("/health")

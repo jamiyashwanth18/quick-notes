@@ -5,6 +5,10 @@ generated route returns until it has been implemented. Every model is an ApiMode
 so its JSON uses camelCase names (app/api_model.py).
 """
 
+from datetime import datetime
+
+from pydantic import Field
+
 from app.api_model import ApiModel
 
 
@@ -30,3 +34,19 @@ class UserRead(ApiModel):
     id: str
     email: str
     role: str
+
+
+class NoteCreate(ApiModel):
+    """Request body of POST /notes (AC-001, AC-002, AC-003, AC-004)."""
+
+    title: str = Field(min_length=1, max_length=100)
+    body: str = Field(default="", max_length=2000)
+
+
+class NoteRead(ApiModel):
+    """A saved note, as returned by POST /notes (AC-001)."""
+
+    id: str
+    title: str
+    body: str
+    created_at: datetime

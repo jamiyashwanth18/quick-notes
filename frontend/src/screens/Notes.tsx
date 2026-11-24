@@ -5,10 +5,9 @@ import React from "react";
 import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
+import { api } from "@/api/client";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { Label, Select } = UI;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { Check, FileText, Trash, AlertCircle } = Icons;
 
 const PRODUCT = "Quick notes";
@@ -18,33 +17,19 @@ const BODY_MAX = 2000;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const mix = (colour, percent) => `color-mix(in srgb, ${colour} ${percent}%, transparent)`;
 
-const INITIAL_NOTES = [
-  {
-    id: "n-0481",
-    title: "Standup notes",
-    body: "Mira ships the invoice import today. Priya is still blocked on the VAT field. Nothing new for the Friday release call.",
-    created_at: "25 Nov 2026, 14:32",
-  },
-  {
-    id: "n-0480",
-    title: "Groceries for the weekend",
-    body: "Rye bread, 2 lemons, olive oil, oat milk, coffee beans (the dark roast), chicken thighs.",
-    created_at: "25 Nov 2026, 09:05",
-  },
-  {
-    id: "n-0479",
-    title: "Call the plumber back",
-    body: "Novak Plumbing rang at 18:12 — they can come Thursday morning. Ask about the radiator valve too.",
-    created_at: "24 Nov 2026, 18:47",
-  },
-];
-
 const stamp = (d) =>
   `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ` +
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
+const toNote = (n) => ({
+  id: n.id,
+  title: n.title,
+  body: n.body,
+  created_at: stamp(new Date(n.createdAt || n.created_at)),
+});
+
 export default function Screen() {
-  const [notes, setNotes] = React.useState(INITIAL_NOTES);
+  const [notes, setNotes] = React.useState([]);
   const [title, setTitle] = React.useState("");
   const [body, setBody] = React.useState("");
   const [error, setError] = React.useState("");
@@ -54,12 +39,41 @@ export default function Screen() {
   const [confirming, setConfirming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [removed, setRemoved] = React.useState("");
+  const [deleteError, setDeleteError] = React.useState("");
+  const [loadingList, setLoadingList] = React.useState(true);
+  const [listError, setListError] = React.useState("");
 
   const timers = React.useRef([]);
   const titleRef = React.useRef(null);
   const deleteRef = React.useRef(null);
   const confirmRef = React.useRef(null);
   const cancelRef = React.useRef(null);
+
+  const loadNotes = React.useCallback(async () => {
+    setLoadingList(true);
+    // `api.GET` rejects (rather than resolving with `error`) when the request never
+    // reaches the server at all -- offline, refused connection -- so that has to be
+    // caught here too, or a visitor without a connection sees an unhandled rejection
+    // instead of the same "could not load" message a server-side error gives them.
+    let data;
+    let apiError;
+    try {
+      ({ data, error: apiError } = await api.GET("/notes"));
+    } catch {
+      apiError = true;
+    }
+    setLoadingList(false);
+    if (apiError || !data) {
+      setListError("Could not load notes. Try again.");
+      return;
+    }
+    setListError("");
+    setNotes(data.map(toNote));
+  }, []);
+
+  React.useEffect(() => {
+    loadNotes();
+  }, [loadNotes]);
 
   React.useEffect(() => () => timers.current.forEach(clearTimeout), []);
   React.useEffect(() => {
@@ -75,11 +89,12 @@ export default function Screen() {
     timers.current.push(t);
   };
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     if (saving) return;
-    if (!title.trim()) {
-      setError("A title is required — notes are filed by their title.");
+    const draftTitle = title.trim();
+    if (!draftTitle) {
+      setError("Title is required");
       setSaved("");
       if (titleRef.current) titleRef.current.focus();
       return;
@@ -88,41 +103,62 @@ export default function Screen() {
     setSaved("");
     setRemoved("");
     setSaving(true);
-    const draft = { title: title.trim(), body: body.trim() };
-    after(450, () => {
-      const note = {
-        id: `n-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-        title: draft.title.slice(0, TITLE_MAX),
-        body: draft.body.slice(0, BODY_MAX),
-        created_at: stamp(new Date()),
-      };
-      setNotes((prev) => [note, ...prev]);
-      setTitle("");
-      setBody("");
-      setSaving(false);
-      setSaved(`Saved “${note.title}” to the shared notepad.`);
-    });
+    const draftBody = body.trim();
+    let data;
+    let apiError;
+    try {
+      ({ data, error: apiError } = await api.POST("/notes", {
+        body: { title: draftTitle, body: draftBody },
+      }));
+    } catch {
+      apiError = true;
+    }
+    setSaving(false);
+    if (apiError || !data) {
+      setError("Could not save the note. Try again.");
+      return;
+    }
+    const note = toNote(data);
+    setNotes((prev) => [note, ...prev]);
+    setTitle("");
+    setBody("");
+    setSaved(`Saved “${note.title}” to the shared notepad.`);
   };
 
   const closeDialog = () => {
     if (deleting) return;
     setConfirming(false);
+    setDeleteError("");
     if (deleteRef.current) deleteRef.current.focus();
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!selectedNote || deleting) return;
-    const gone = selectedNote.title;
     setDeleting(true);
-    after(400, () => {
-      setNotes((prev) => prev.filter((n) => n.id !== selectedNote.id));
-      setDeleting(false);
-      setConfirming(false);
-      setSelected(null);
-      setSaved("");
-      setRemoved(`Deleted “${gone}”. It is gone for everyone — there is no trash and no undo.`);
-      if (deleteRef.current) deleteRef.current.focus();
-    });
+    setDeleteError("");
+    // Deleting is a real, shared action (DELETE /notes/{id}): it has to reach the
+    // server so every other visitor's list loses the note too, not just this tab's
+    // local state.
+    let apiError;
+    try {
+      ({ error: apiError } = await api.DELETE("/notes/{id}", {
+        params: { path: { id: selectedNote.id } },
+      }));
+    } catch {
+      apiError = true;
+    }
+    setDeleting(false);
+    if (apiError) {
+      setDeleteError("Could not delete the note. Try again.");
+      return;
+    }
+    setNotes((prev) => prev.filter((n) => n.id !== selectedNote.id));
+    setConfirming(false);
+    setSelected(null);
+    setSaved("");
+    setDeleteError("");
+    setRemoved("Note deleted permanently. There is no undo.");
+    if (deleteRef.current) deleteRef.current.focus();
   };
 
   const trap = (e) => {
@@ -132,8 +168,9 @@ export default function Screen() {
       return;
     }
     if (e.key !== "Tab") return;
-    const first = confirmRef.current;
-    const last = cancelRef.current;
+    // DOM order is Cancel then Delete, so the trap must wrap in that order too.
+    const first = cancelRef.current;
+    const last = confirmRef.current;
     if (!first || !last) return;
     if (e.shiftKey && document.activeElement === first) {
       e.preventDefault();
@@ -165,37 +202,69 @@ export default function Screen() {
       <style>{css}</style>
 
       {/* Row 1 — page title */}
-      <div data-wf="b-0-0" className="flex items-end justify-between pb-4" style={{ borderBottom: rule }}>
+      <div
+        data-wf="b-0-0"
+        className="flex items-end justify-between pb-4"
+        style={{ borderBottom: rule }}
+      >
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: brand.neutralColor }}>{PRODUCT}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>{SCREEN}</h1>
+          <p
+            className="text-[11px] font-bold uppercase tracking-[0.18em]"
+            style={{ color: brand.neutralColor }}
+          >
+            {PRODUCT}
+          </p>
+          <h1
+            data-testid="notes-title"
+            className="mt-1 text-3xl font-bold tracking-tight"
+            style={{ fontFamily: brand.fontHeading }}
+          >
+            {SCREEN}
+          </h1>
         </div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: brand.neutralColor, fontVariantNumeric: "tabular-nums" }}>
+        <p
+          className="text-[11px] font-bold uppercase tracking-[0.14em]"
+          style={{ color: brand.neutralColor, fontVariantNumeric: "tabular-nums" }}
+        >
           Shared notepad · {notes.length} {notes.length === 1 ? "note" : "notes"} · free, no sign-in
         </p>
       </div>
 
-      <form onSubmit={save} noValidate>
+      <form data-testid="new-note-form" onSubmit={save} noValidate>
         {/* Row 2 — new note form */}
         <section data-wf="b-1-0" className="pt-5">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ fontFamily: brand.fontHeading, color: brand.neutralColor }}>New note</h2>
+          <h2
+            className="text-[11px] font-bold uppercase tracking-[0.18em]"
+            style={{ fontFamily: brand.fontHeading, color: brand.neutralColor }}
+          >
+            New note
+          </h2>
 
           <div className="mt-3 grid gap-4 md:grid-cols-12">
             <div className="md:col-span-5">
               <div className="flex items-baseline justify-between">
-                <Label htmlFor="note-title" className="text-[11px] font-bold uppercase tracking-[0.14em]">
+                <Label
+                  htmlFor="note-title"
+                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
+                >
                   Title <span style={{ color: brand.accentColor }}>*</span>
                 </Label>
-                <span className="text-[11px] font-semibold" style={countStyle(title.length, TITLE_MAX)}>
+                <span
+                  className="text-[11px] font-semibold"
+                  style={countStyle(title.length, TITLE_MAX)}
+                >
                   {title.length}/{TITLE_MAX}
                 </span>
               </div>
               <input
-                data-wf="i-1-0-0"
+                data-testid="title-required-max-100-characters-input"
                 id="note-title"
                 ref={titleRef}
                 value={title}
-                onChange={(e) => { setTitle(e.target.value.slice(0, TITLE_MAX)); if (error) setError(""); }}
+                onChange={(e) => {
+                  setTitle(e.target.value.slice(0, TITLE_MAX));
+                  if (error) setError("");
+                }}
                 maxLength={TITLE_MAX}
                 required
                 aria-required="true"
@@ -203,10 +272,17 @@ export default function Screen() {
                 aria-describedby={error ? "note-title-error note-rules" : "note-rules"}
                 placeholder="Standup notes"
                 className="qn-f mt-1 h-10 w-full bg-white px-3 text-sm outline-none"
-                style={{ border: error ? `2px solid ${brand.accentColor}` : rule, borderRadius: brand.radius }}
+                style={{
+                  border: error ? `2px solid ${brand.accentColor}` : rule,
+                  borderRadius: brand.radius,
+                }}
               />
               {error ? (
-                <p id="note-title-error" className="mt-2 flex items-start gap-1.5 text-xs font-semibold" style={{ color: brand.accentColor }}>
+                <p
+                  id="note-title-error"
+                  className="mt-2 flex items-start gap-1.5 text-xs font-semibold"
+                  style={{ color: brand.accentColor }}
+                >
                   <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <span>{error}</span>
                 </p>
@@ -215,13 +291,21 @@ export default function Screen() {
 
             <div className="md:col-span-7">
               <div className="flex items-baseline justify-between">
-                <Label htmlFor="note-body" className="text-[11px] font-bold uppercase tracking-[0.14em]">Body</Label>
-                <span className="text-[11px] font-semibold" style={countStyle(body.length, BODY_MAX)}>
+                <Label
+                  htmlFor="note-body"
+                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
+                >
+                  Body
+                </Label>
+                <span
+                  className="text-[11px] font-semibold"
+                  style={countStyle(body.length, BODY_MAX)}
+                >
                   {body.length}/{BODY_MAX}
                 </span>
               </div>
               <textarea
-                data-wf="i-1-0-1"
+                data-testid="body-max-2-000-characters-input"
                 id="note-body"
                 value={body}
                 onChange={(e) => setBody(e.target.value.slice(0, BODY_MAX))}
@@ -237,13 +321,22 @@ export default function Screen() {
         </section>
 
         {/* Row 3 — rules + save */}
-        <div className="grid items-start gap-4 pb-5 pt-4 md:grid-cols-12" style={{ borderBottom: rule }}>
-          <p data-wf="b-2-0" id="note-rules" className="text-xs leading-relaxed md:col-span-9" style={{ color: brand.neutralColor, maxWidth: "68ch" }}>
-            Title is required. Titles are limited to 100 characters and body text to 2,000 characters. Notes cannot be edited once saved.
+        <div
+          className="grid items-start gap-4 pb-5 pt-4 md:grid-cols-12"
+          style={{ borderBottom: rule }}
+        >
+          <p
+            data-wf="b-2-0"
+            id="note-rules"
+            className="text-xs leading-relaxed md:col-span-9"
+            style={{ color: brand.neutralColor, maxWidth: "68ch" }}
+          >
+            Title is required. Titles are limited to 100 characters and body text to 2,000
+            characters. Notes cannot be edited once saved.
           </p>
           <div className="md:col-span-3 md:justify-self-end">
             <button
-              data-wf="b-2-1"
+              data-testid="save-note-btn"
               type="submit"
               disabled={saving}
               aria-busy={saving ? "true" : "false"}
@@ -280,17 +373,37 @@ export default function Screen() {
       {/* Row 5 — shared notes list */}
       <section data-wf="b-4-0" className="pt-4">
         <div className="flex items-baseline justify-between pb-2" style={{ borderBottom: rule }}>
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ fontFamily: brand.fontHeading, fontVariantNumeric: "tabular-nums" }}>
+          <h2
+            className="text-[11px] font-bold uppercase tracking-[0.18em]"
+            style={{ fontFamily: brand.fontHeading, fontVariantNumeric: "tabular-nums" }}
+          >
             Shared notes ({notes.length})
           </h2>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: brand.neutralColor }}>
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: brand.neutralColor }}
+          >
             {selectedNote ? "1 selected" : "Select a note to delete"}
           </p>
         </div>
 
-        {notes.length > 0 ? (
-          <ul className="m-0 list-none p-0">
-            {notes.map((n) => {
+        {loadingList ? (
+          <p className="py-6 text-xs font-semibold" style={{ color: brand.neutralColor }}>
+            Loading notes…
+          </p>
+        ) : listError ? (
+          <p
+            role="alert"
+            className="py-6 text-xs font-semibold"
+            style={{ color: brand.accentColor }}
+          >
+            {listError}
+          </p>
+        ) : null}
+
+        {!loadingList && !listError && notes.length > 0 ? (
+          <ul data-testid="shared-notes-3-list" className="m-0 list-none p-0">
+            {notes.map((n, index) => {
               const isOn = n.id === selected;
               return (
                 <li
@@ -303,31 +416,50 @@ export default function Screen() {
                   }}
                 >
                   <input
-                    data-wf={`i-4-0-${notes.indexOf(n)}`}
+                    data-wf={`i-4-0-${index}`}
                     type="radio"
                     name="note-select"
                     id={`note-${n.id}`}
                     checked={isOn}
-                    onChange={() => { setSelected(n.id); setRemoved(""); }}
+                    onChange={() => {
+                      setSelected(n.id);
+                      setRemoved("");
+                    }}
                     className="qn-f mt-1 h-4 w-4 shrink-0"
                     style={{ accentColor: brand.primaryColor }}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <label htmlFor={`note-${n.id}`} className="cursor-pointer text-sm font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>
+                      <label
+                        htmlFor={`note-${n.id}`}
+                        className="cursor-pointer text-sm font-bold tracking-tight"
+                        style={{ fontFamily: brand.fontHeading }}
+                      >
                         {n.title}
                       </label>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: brand.neutralColor, fontVariantNumeric: "tabular-nums" }}>
-                        {isOn ? <span className="mr-3" style={{ color: brand.primaryColor }}>Selected</span> : null}
+                      <span
+                        className="text-[11px] font-semibold uppercase tracking-[0.1em]"
+                        style={{ color: brand.neutralColor, fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {isOn ? (
+                          <span className="mr-3" style={{ color: brand.primaryColor }}>
+                            Selected
+                          </span>
+                        ) : null}
                         {n.created_at}
                       </span>
                     </div>
                     {n.body ? (
-                      <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed" style={{ color: brand.neutralColor, maxWidth: "74ch" }}>
+                      <p
+                        className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed"
+                        style={{ color: brand.neutralColor, maxWidth: "74ch" }}
+                      >
                         {n.body}
                       </p>
                     ) : (
-                      <p className="mt-1 text-[13px] italic" style={{ color: brand.neutralColor }}>Title only — no body text.</p>
+                      <p className="mt-1 text-[13px] italic" style={{ color: brand.neutralColor }}>
+                        Title only — no body text.
+                      </p>
                     )}
                   </div>
                 </li>
@@ -341,11 +473,15 @@ export default function Screen() {
       <div className="grid gap-3 pt-4 md:grid-cols-12 md:items-center">
         <div className="md:col-span-3">
           <button
-            data-wf="b-5-0"
+            data-testid="delete-note-btn"
             type="button"
             ref={deleteRef}
             disabled={!selectedNote}
-            onClick={() => { setConfirming(true); setRemoved(""); }}
+            onClick={() => {
+              setConfirming(true);
+              setRemoved("");
+              setDeleteError("");
+            }}
             className="qn-f inline-flex h-10 w-full items-center justify-center gap-2 px-4 text-xs font-bold uppercase tracking-[0.14em] transition-colors duration-150 hover:bg-black/[0.04] disabled:opacity-30 disabled:hover:bg-transparent md:w-auto"
             style={{ border: rule, borderRadius: brand.radius }}
           >
@@ -361,12 +497,25 @@ export default function Screen() {
       </div>
 
       {/* Row 7 — empty state */}
-      {notes.length === 0 ? (
-        <div data-wf="b-6-0" className="mt-4 px-6 py-12 text-center" style={{ border: rule, borderRadius: brand.radius }}>
+      {notes.length === 0 && !loadingList && !listError ? (
+        <div
+          data-testid="no-notes-yet-write-the-first-one-a-empty"
+          className="mt-4 px-6 py-12 text-center"
+          style={{ border: rule, borderRadius: brand.radius }}
+        >
           <FileText className="mx-auto h-6 w-6" aria-hidden="true" />
-          <h3 className="mt-3 text-base font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>No notes yet. Write the first one above.</h3>
-          <p className="mx-auto mt-2 text-xs leading-relaxed" style={{ color: brand.neutralColor, maxWidth: "48ch" }}>
-            This notepad is shared by everyone, on every device. Whatever you save here is what the next visitor reads.
+          <h3
+            className="mt-3 text-base font-bold tracking-tight"
+            style={{ fontFamily: brand.fontHeading }}
+          >
+            No notes yet. Write the first one above.
+          </h3>
+          <p
+            className="mx-auto mt-2 text-xs leading-relaxed"
+            style={{ color: brand.neutralColor, maxWidth: "48ch" }}
+          >
+            This notepad is shared by everyone, on every device. Whatever you save here is what the
+            next visitor reads.
           </p>
         </div>
       ) : null}
@@ -374,10 +523,12 @@ export default function Screen() {
       {/* Row 8 — delete confirmation */}
       {confirming && selectedNote ? (
         <div
-          data-wf="b-7-0"
+          data-testid="delete-this-note-this-cannot-be-un-modal"
           className="qn-scrim fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: mix(brand.primaryColor, 55) }}
-          onMouseDown={(e) => { if (e.target === e.currentTarget) closeDialog(); }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeDialog();
+          }}
         >
           <div
             role="dialog"
@@ -386,14 +537,37 @@ export default function Screen() {
             aria-describedby="delete-desc"
             onKeyDown={trap}
             className="qn-dialog w-full max-w-md bg-white p-6"
-            style={{ border: rule, borderRadius: brand.radius, boxShadow: `0 16px 40px ${mix(brand.primaryColor, 22)}` }}
+            style={{
+              border: rule,
+              borderRadius: brand.radius,
+              boxShadow: `0 16px 40px ${mix(brand.primaryColor, 22)}`,
+            }}
           >
-            <h2 id="delete-title" className="text-lg font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>
+            <h2
+              id="delete-title"
+              className="text-lg font-bold tracking-tight"
+              style={{ fontFamily: brand.fontHeading }}
+            >
               Delete this note? This cannot be undone.
             </h2>
-            <p id="delete-desc" className="mt-2 text-xs leading-relaxed" style={{ color: brand.neutralColor }}>
-              “{selectedNote.title}” — {selectedNote.created_at}. It disappears from the shared list for every visitor. There is no trash and no undo.
+            <p
+              id="delete-desc"
+              className="mt-2 text-xs leading-relaxed"
+              style={{ color: brand.neutralColor }}
+            >
+              “{selectedNote.title}” — {selectedNote.created_at}. It disappears from the shared list
+              for every visitor. There is no trash and no undo.
             </p>
+            {deleteError ? (
+              <p
+                role="alert"
+                className="mt-3 flex items-start gap-1.5 text-xs font-semibold"
+                style={{ color: brand.accentColor }}
+              >
+                <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{deleteError}</span>
+              </p>
+            ) : null}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 data-wf="i-7-0-1"
