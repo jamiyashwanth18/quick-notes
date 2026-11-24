@@ -5,6 +5,7 @@ body of up to 2,000 characters; GET /notes lists the notes in the shared store. 
 no sign-in for this app, so these tests use the plain `client` fixture.
 """
 
+import re
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -201,3 +202,59 @@ def test_tc051_a_deleted_note_cannot_be_found_or_restored(client: TestClient) ->
 
     second_delete_response = client.delete(f"/notes/{note_id}")
     assert second_delete_response.status_code == 404, second_delete_response.text
+
+
+def test_tc018_export_returns_only_the_100_most_recent_notes_when_over_the_limit(
+    client: TestClient,
+) -> None:
+    total_notes = 105
+    for index in range(1, total_notes + 1):
+        title = f"Note-{index:03d}"
+        response = client.post("/notes", json={"title": title, "body": f"Body {index}"})
+        assert response.status_code == 201, response.text
+
+    export_response = client.get("/notes/export")
+
+    assert export_response.status_code == 200, export_response.text
+    content = export_response.text
+    entries = re.findall(r"^## (Note-\d{3})$", content, flags=re.MULTILINE)
+    assert len(entries) == 100
+
+    for index in range(6, total_notes + 1):
+        assert f"Note-{index:03d}" in content
+    for index in range(1, 6):
+        assert f"Note-{index:03d}" not in content
+
+
+def test_tc020_export_includes_all_notes_when_fewer_than_the_limit_exist(
+    client: TestClient,
+) -> None:
+    titles = [f"Note-{letter}" for letter in "ABCDEFG"]
+    for title in titles:
+        response = client.post("/notes", json={"title": title, "body": f"Body for {title}"})
+        assert response.status_code == 201, response.text
+
+    export_response = client.get("/notes/export")
+
+    assert export_response.status_code == 200, export_response.text
+    content = export_response.text
+    entries = re.findall(r"^## ", content, flags=re.MULTILINE)
+    assert len(entries) == 7
+    for title in titles:
+        assert title in content
+
+
+def test_tc023_export_with_no_notes_returns_200_with_a_markdown_file_with_no_entries(
+    client: TestClient,
+) -> None:
+    list_response = client.get("/notes")
+    assert list_response.status_code == 200, list_response.text
+    assert list_response.json() == []
+
+    export_response = client.get("/notes/export")
+
+    assert export_response.status_code == 200, export_response.text
+    assert "markdown" in export_response.headers.get("content-type", "").lower()
+    content = export_response.text
+    entries = re.findall(r"^## ", content, flags=re.MULTILINE)
+    assert entries == []

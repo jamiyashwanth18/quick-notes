@@ -20,10 +20,27 @@ function renderScreen() {
 }
 
 let lastAnchor: HTMLAnchorElement | null = null;
+let lastBlobText = "";
+const OriginalBlob = global.Blob;
+
+function buildMarkdown(noteCount: number): string {
+  const notes = Array.from(
+    { length: noteCount },
+    (_, i) => `## Note ${i + 1}\n\n2026-01-0${(i % 9) + 1}T00:00:00Z\n\nBody ${i + 1}`,
+  ).join("\n\n");
+  return `# Quick Notes\n\n${notes}`;
+}
 
 beforeEach(() => {
   mockGet.mockReset();
   lastAnchor = null;
+  lastBlobText = "";
+  global.Blob = class RecordingBlob extends OriginalBlob {
+    constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+      super(parts, options);
+      lastBlobText = (parts ?? []).join("");
+    }
+  } as unknown as typeof Blob;
   URL.createObjectURL = vi.fn(() => "blob:mock-url");
   URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
@@ -36,6 +53,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  global.Blob = OriginalBlob;
 });
 
 describe("Export screen", () => {
@@ -106,6 +124,43 @@ describe("Export screen", () => {
 
     expect(await screen.findByText("Could not export notes. Try again.")).toBeInTheDocument();
     expect(lastAnchor).toBeNull();
+  });
+
+  it("[AC-016] downloads exactly the server-capped 100 most recent notes when more than the limit exist", async () => {
+    const markdown = buildMarkdown(100);
+    mockGet.mockResolvedValue({
+      data: markdown,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+
+    renderScreen();
+    fireEvent.click(screen.getByTestId("download-markdown-btn"));
+
+    await waitFor(() => expect(lastAnchor).not.toBeNull());
+    expect(mockGet).toHaveBeenCalledWith("/notes/export", { parseAs: "text" });
+
+    expect(lastBlobText).toBe(markdown);
+    expect((lastBlobText.match(/^## /gm) ?? []).length).toBe(100);
+    expect(await screen.findByText(`Downloaded ${lastAnchor?.download}.`)).toBeInTheDocument();
+  });
+
+  it("[AC-017] downloads all existing notes, unaltered, when there are fewer notes than the export limit", async () => {
+    const markdown = buildMarkdown(3);
+    mockGet.mockResolvedValue({
+      data: markdown,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+
+    renderScreen();
+    fireEvent.click(screen.getByTestId("download-markdown-btn"));
+
+    await waitFor(() => expect(lastAnchor).not.toBeNull());
+
+    expect(lastBlobText).toBe(markdown);
+    expect((lastBlobText.match(/^## /gm) ?? []).length).toBe(3);
+    expect(await screen.findByText(`Downloaded ${lastAnchor?.download}.`)).toBeInTheDocument();
   });
 
   it("[AC-013] saves a valid export limit and confirms it", () => {
