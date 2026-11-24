@@ -9,14 +9,15 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.errors import NOTE_INVALID, NOTE_NOT_FOUND
+from app.errors import NOTE_EXPORT_EMPTY, NOTE_INVALID, NOTE_NOT_FOUND
 from app.models import Note
 from app.schemas import NoteCreate, NoteRead
+from app.services.export import export_notes_document
 
 router = APIRouter(prefix="/notes", tags=["Notes"])
 
@@ -93,6 +94,41 @@ def list_notes(session: Annotated[Session, Depends(get_db)]) -> list[NoteRead]:
     """Return every note in the shared store, newest-created-first (AC-005, AC-006)."""
     notes = list_note_records(session)
     return [NoteRead.model_validate(note) for note in notes]
+
+
+@router.get(
+    "/export",
+    response_class=Response,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": (
+                "A single Markdown (.md) file assembled from the most recent notes, "
+                "up to the export limit, with a filename derived from today's date "
+                "(AC-013, AC-014)."
+            ),
+            "content": {"text/markdown": {"schema": {"type": "string"}}},
+        },
+        NOTE_EXPORT_EMPTY.status: {"description": NOTE_EXPORT_EMPTY.message},
+    },
+)
+def export_notes(session: Annotated[Session, Depends(get_db)]) -> Response:
+    """Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-015).
+
+    Raises `NOTE_EXPORT_EMPTY` (404) when the shared store has no notes at all, rather
+    than downloading an empty file nobody asked for (AC-015). Otherwise the file is
+    returned with its date-derived filename on `Content-Disposition` (AC-014), so the
+    browser downloads it under that name with no email or cloud delivery involved
+    (AC-013).
+    """
+    document = export_notes_document(session)
+    if document is None:
+        raise HTTPException(status_code=NOTE_EXPORT_EMPTY.status, detail=NOTE_EXPORT_EMPTY.message)
+    return Response(
+        content=document.content,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{document.filename}"'},
+    )
 
 
 @router.delete(

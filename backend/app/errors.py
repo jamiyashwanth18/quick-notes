@@ -32,3 +32,8 @@ NOTE_INVALID = ErrorCode(
 # in the shared store (AC-010's counterpart -- deleting an id that is already gone, or
 # was never there, must not silently succeed).
 NOTE_NOT_FOUND = ErrorCode(404, "Note not found.")
+
+# GET /notes/export: raised directly by the router when the shared store has no notes
+# at all, so the caller is told there is nothing to export instead of receiving an
+# empty Markdown file forced on them (AC-015).
+NOTE_EXPORT_EMPTY = ErrorCode(404, "There are no notes to export.")

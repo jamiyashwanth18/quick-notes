@@ -132,6 +132,31 @@
         }
       }
     },
+    "/notes/export": {
+      "get": {
+        "tags": [
+          "Notes"
+        ],
+        "summary": "Export Notes",
+        "description": "Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-015).\n\nRaises `NOTE_EXPORT_EMPTY` (404) when the shared store has no notes at all, rather\nthan downloading an empty file nobody asked for (AC-015). Otherwise the file is\nreturned with its date-derived filename on `Content-Disposition` (AC-014), so the\nbrowser downloads it under that name with no email or cloud delivery involved\n(AC-013).",
+        "operationId": "export_notes_notes_export_get",
+        "responses": {
+          "200": {
+            "description": "A single Markdown (.md) file assembled from the most recent notes, up to the export limit, with a filename derived from today's date (AC-013, AC-014).",
+            "content": {
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "There are no notes to export."
+          }
+        }
+      }
+    },
     "/notes/{note_id}": {
       "delete": {
         "tags": [

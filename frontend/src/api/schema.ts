@@ -66,6 +66,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notes/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Notes
+         * @description Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-015).
+         *
+         *     Raises `NOTE_EXPORT_EMPTY` (404) when the shared store has no notes at all, rather
+         *     than downloading an empty file nobody asked for (AC-015). Otherwise the file is
+         *     returned with its date-derived filename on `Content-Disposition` (AC-014), so the
+         *     browser downloads it under that name with no email or cloud delivery involved
+         *     (AC-013).
+         */
+        get: operations["export_notes_notes_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notes/{note_id}": {
         parameters: {
             query?: never;
@@ -285,6 +311,33 @@ export interface operations {
             };
             /** @description Title is required and must be 1 to 100 characters; body must be 2,000 characters or fewer. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    export_notes_notes_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A single Markdown (.md) file assembled from the most recent notes, up to the export limit, with a filename derived from today's date (AC-013, AC-014). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": string;
+                };
+            };
+            /** @description There are no notes to export. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
