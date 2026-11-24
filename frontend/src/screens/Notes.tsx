@@ -5,6 +5,7 @@ import React from "react";
 import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
+import { api } from "@/api/client";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { Label, Select } = UI;
@@ -18,26 +19,10 @@ const BODY_MAX = 2000;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const mix = (colour, percent) => `color-mix(in srgb, ${colour} ${percent}%, transparent)`;
 
-const INITIAL_NOTES = [
-  {
-    id: "n-0481",
-    title: "Standup notes",
-    body: "Mira ships the invoice import today. Priya is still blocked on the VAT field. Nothing new for the Friday release call.",
-    created_at: "25 Nov 2026, 14:32",
-  },
-  {
-    id: "n-0480",
-    title: "Groceries for the weekend",
-    body: "Rye bread, 2 lemons, olive oil, oat milk, coffee beans (the dark roast), chicken thighs.",
-    created_at: "25 Nov 2026, 09:05",
-  },
-  {
-    id: "n-0479",
-    title: "Call the plumber back",
-    body: "Novak Plumbing rang at 18:12 — they can come Thursday morning. Ask about the radiator valve too.",
-    created_at: "24 Nov 2026, 18:47",
-  },
-];
+// No listing endpoint yet (sprint 1 ships creation only): the shared list starts
+// empty and only ever holds what this session has saved or what it has deleted
+// back out again.
+const INITIAL_NOTES = [];
 
 const stamp = (d) =>
   `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ` +
@@ -75,11 +60,12 @@ export default function Screen() {
     timers.current.push(t);
   };
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     if (saving) return;
-    if (!title.trim()) {
-      setError("A title is required — notes are filed by their title.");
+    const draftTitle = title.trim();
+    if (!draftTitle) {
+      setError("Title is required");
       setSaved("");
       if (titleRef.current) titleRef.current.focus();
       return;
@@ -88,20 +74,25 @@ export default function Screen() {
     setSaved("");
     setRemoved("");
     setSaving(true);
-    const draft = { title: title.trim(), body: body.trim() };
-    after(450, () => {
-      const note = {
-        id: `n-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-        title: draft.title.slice(0, TITLE_MAX),
-        body: draft.body.slice(0, BODY_MAX),
-        created_at: stamp(new Date()),
-      };
-      setNotes((prev) => [note, ...prev]);
-      setTitle("");
-      setBody("");
-      setSaving(false);
-      setSaved(`Saved “${note.title}” to the shared notepad.`);
+    const draftBody = body.trim();
+    const { data, error: apiError } = await api.POST("/notes", {
+      body: { title: draftTitle, body: draftBody },
     });
+    setSaving(false);
+    if (apiError || !data) {
+      setError("Could not save the note. Try again.");
+      return;
+    }
+    const note = {
+      id: data.id,
+      title: data.title,
+      body: data.body,
+      created_at: stamp(new Date(data.createdAt || data.created_at)),
+    };
+    setNotes((prev) => [note, ...prev]);
+    setTitle("");
+    setBody("");
+    setSaved(`Saved “${note.title}” to the shared notepad.`);
   };
 
   const closeDialog = () => {
@@ -112,7 +103,6 @@ export default function Screen() {
 
   const confirmDelete = () => {
     if (!selectedNote || deleting) return;
-    const gone = selectedNote.title;
     setDeleting(true);
     after(400, () => {
       setNotes((prev) => prev.filter((n) => n.id !== selectedNote.id));
@@ -120,7 +110,7 @@ export default function Screen() {
       setConfirming(false);
       setSelected(null);
       setSaved("");
-      setRemoved(`Deleted “${gone}”. It is gone for everyone — there is no trash and no undo.`);
+      setRemoved("Note deleted permanently. There is no undo.");
       if (deleteRef.current) deleteRef.current.focus();
     });
   };
@@ -168,14 +158,14 @@ export default function Screen() {
       <div data-wf="b-0-0" className="flex items-end justify-between pb-4" style={{ borderBottom: rule }}>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: brand.neutralColor }}>{PRODUCT}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>{SCREEN}</h1>
+          <h1 data-testid="notes-title" className="mt-1 text-3xl font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>{SCREEN}</h1>
         </div>
         <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: brand.neutralColor, fontVariantNumeric: "tabular-nums" }}>
           Shared notepad · {notes.length} {notes.length === 1 ? "note" : "notes"} · free, no sign-in
         </p>
       </div>
 
-      <form onSubmit={save} noValidate>
+      <form data-testid="new-note-form" onSubmit={save} noValidate>
         {/* Row 2 — new note form */}
         <section data-wf="b-1-0" className="pt-5">
           <h2 className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ fontFamily: brand.fontHeading, color: brand.neutralColor }}>New note</h2>
@@ -191,7 +181,7 @@ export default function Screen() {
                 </span>
               </div>
               <input
-                data-wf="i-1-0-0"
+                data-testid="title-required-max-100-characters-input"
                 id="note-title"
                 ref={titleRef}
                 value={title}
@@ -221,7 +211,7 @@ export default function Screen() {
                 </span>
               </div>
               <textarea
-                data-wf="i-1-0-1"
+                data-testid="body-max-2-000-characters-input"
                 id="note-body"
                 value={body}
                 onChange={(e) => setBody(e.target.value.slice(0, BODY_MAX))}
@@ -243,7 +233,7 @@ export default function Screen() {
           </p>
           <div className="md:col-span-3 md:justify-self-end">
             <button
-              data-wf="b-2-1"
+              data-testid="save-note-btn"
               type="submit"
               disabled={saving}
               aria-busy={saving ? "true" : "false"}
@@ -289,7 +279,7 @@ export default function Screen() {
         </div>
 
         {notes.length > 0 ? (
-          <ul className="m-0 list-none p-0">
+          <ul data-testid="shared-notes-3-list" className="m-0 list-none p-0">
             {notes.map((n) => {
               const isOn = n.id === selected;
               return (
@@ -341,7 +331,7 @@ export default function Screen() {
       <div className="grid gap-3 pt-4 md:grid-cols-12 md:items-center">
         <div className="md:col-span-3">
           <button
-            data-wf="b-5-0"
+            data-testid="delete-note-btn"
             type="button"
             ref={deleteRef}
             disabled={!selectedNote}
@@ -362,7 +352,7 @@ export default function Screen() {
 
       {/* Row 7 — empty state */}
       {notes.length === 0 ? (
-        <div data-wf="b-6-0" className="mt-4 px-6 py-12 text-center" style={{ border: rule, borderRadius: brand.radius }}>
+        <div data-testid="no-notes-yet-write-the-first-one-a-empty" className="mt-4 px-6 py-12 text-center" style={{ border: rule, borderRadius: brand.radius }}>
           <FileText className="mx-auto h-6 w-6" aria-hidden="true" />
           <h3 className="mt-3 text-base font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>No notes yet. Write the first one above.</h3>
           <p className="mx-auto mt-2 text-xs leading-relaxed" style={{ color: brand.neutralColor, maxWidth: "48ch" }}>
@@ -374,7 +364,7 @@ export default function Screen() {
       {/* Row 8 — delete confirmation */}
       {confirming && selectedNote ? (
         <div
-          data-wf="b-7-0"
+          data-testid="delete-this-note-this-cannot-be-un-modal"
           className="qn-scrim fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: mix(brand.primaryColor, 55) }}
           onMouseDown={(e) => { if (e.target === e.currentTarget) closeDialog(); }}
