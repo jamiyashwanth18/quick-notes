@@ -5,10 +5,12 @@ Request and response shapes come from app.schemas, the error codes from app.erro
 so the OpenAPI document carries the full contract.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -26,7 +28,7 @@ def list_note_records(session: Session) -> list[Note]:
     list every visitor reads, ordered by `created_at` descending so the note created
     last is first regardless of which visitor or device created it.
     """
-    return list(session.query(Note).order_by(Note.created_at.desc()).all())
+    return list(session.scalars(select(Note).order_by(Note.created_at.desc())).all())
 
 
 def create_note_record(session: Session, body: NoteCreate) -> Note:
@@ -34,8 +36,15 @@ def create_note_record(session: Session, body: NoteCreate) -> Note:
 
     `body` has already passed `NoteCreate`'s own field constraints (title 1-100
     characters, body up to 2,000), so the only job left here is to save it.
+
+    `created_at` is stamped here, with the application's own clock, rather than left
+    to the column's `server_default=func.now()`: on PostgreSQL `now()` returns the
+    start time of the surrounding transaction, not the statement's own time, so two
+    notes created in the same transaction (as every test here does, and as two
+    requests handled back to back sometimes do) would otherwise get the exact same
+    timestamp and the newest-first order (AC-005, AC-006) would be unreliable.
     """
-    note = Note(id=str(uuid4()), title=body.title, body=body.body)
+    note = Note(id=str(uuid4()), title=body.title, body=body.body, created_at=datetime.now(UTC))
     session.add(note)
     session.commit()
     session.refresh(note)
