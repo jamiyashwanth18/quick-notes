@@ -5,7 +5,7 @@
 <!-- sdlc:auto:start overview -->
 Quick Notes is a small web app to keep short notes. A user can create a note with a title (required, max 100 characters) and text (max 2,000 characters). The user sees all notes in a list, newest first, with a message when there are no notes. The user can delete a note after confirming. The user can export all notes as one Markdown file; the file name is made from the date, and the number of exported notes is limited by a setting (default 100). No sign-in. Two sprints: sprint 1 is create and list, sprint 2 is delete and export.
 
-**Documentation version:** v2
+**Documentation version:** v3
 <!-- sdlc:auto:end overview -->
 
 ## Contents
@@ -30,7 +30,7 @@ Quick Notes is a small web app to keep short notes. A user can create a note wit
 | [Tests](testing/test-cases.md) | 0 tests |
 | [Deployment guide](deployment/deployment-guide.md) | deployed |
 | [Runbook](deployment/runbook.md) | deployed |
-| [Release notes](deployment/release-notes.md) | 1 release |
+| [Release notes](deployment/release-notes.md) | 2 releases |
 | [Traceability matrix](traceability-matrix.md) | 8 requirements |
-| [Changelog](CHANGELOG.md) | 2 versions |
+| [Changelog](CHANGELOG.md) | 3 versions |
 <!-- sdlc:auto:end contents -->
