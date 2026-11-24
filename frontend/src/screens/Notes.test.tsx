@@ -145,4 +145,46 @@ describe("Notes screen", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load notes. Try again.");
     expect(screen.queryByTestId("no-notes-yet-write-the-first-one-a-empty")).not.toBeInTheDocument();
   });
+
+  it("[AC-007] shows a friendly empty-state message instead of an empty list when the shared store has no notes", async () => {
+    mockGet.mockResolvedValue({ data: [], error: undefined, response: new Response() });
+
+    render(<Screen />);
+
+    expect(
+      await screen.findByTestId("no-notes-yet-write-the-first-one-a-empty"),
+    ).toHaveTextContent("No notes yet. Write the first one above.");
+    expect(screen.queryByTestId("shared-notes-3-list")).not.toBeInTheDocument();
+  });
+
+  it("[AC-008] replaces the empty-state message with the list containing the note once it is created", async () => {
+    const id = crypto.randomUUID();
+    mockGet.mockResolvedValue({ data: [], error: undefined, response: new Response() });
+    mockPost.mockResolvedValue({
+      data: {
+        id,
+        title: "First note",
+        body: "The very first one.",
+        createdAt: "2026-11-25T14:32:00Z",
+      },
+      error: undefined,
+      response: new Response(),
+    });
+
+    render(<Screen />);
+
+    expect(await screen.findByTestId("no-notes-yet-write-the-first-one-a-empty")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("title-required-max-100-characters-input"), {
+      target: { value: "First note" },
+    });
+    fireEvent.change(screen.getByTestId("body-max-2-000-characters-input"), {
+      target: { value: "The very first one." },
+    });
+    fireEvent.click(screen.getByTestId("save-note-btn"));
+
+    const list = await screen.findByTestId("shared-notes-3-list");
+    expect(list).toHaveTextContent("First note");
+    expect(screen.queryByTestId("no-notes-yet-write-the-first-one-a-empty")).not.toBeInTheDocument();
+  });
 });
