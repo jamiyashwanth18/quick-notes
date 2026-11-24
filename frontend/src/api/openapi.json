@@ -138,7 +138,7 @@
           "Notes"
         ],
         "summary": "Export Notes",
-        "description": "Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-015).\n\nRaises `NOTE_EXPORT_EMPTY` (404) when the shared store has no notes at all, rather\nthan downloading an empty file nobody asked for (AC-015). Otherwise the file is\nreturned with its date-derived filename on `Content-Disposition` (AC-014), so the\nbrowser downloads it under that name with no email or cloud delivery involved\n(AC-013).",
+        "description": "Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-015).\n\nRaises `NOTE_EXPORT_EMPTY` (404) when the shared store has no notes at all, rather\nthan downloading an empty file nobody asked for (AC-015). Otherwise the file is\nreturned with its date-derived filename on `Content-Disposition` (AC-014), so the\nbrowser downloads it under that name with no email or cloud delivery involved\n(AC-013). The number of notes included is whatever the export-limit setting\ncurrently holds (AC-019), not a fixed value, so changing it through PUT /settings\nchanges the next export without anything else here having to change.",
         "operationId": "export_notes_notes_export_get",
         "responses": {
           "200": {
@@ -192,6 +192,61 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get Settings",
+        "description": "Return the current export-limit setting, defaulting to 100 (AC-018).",
+        "operationId": "get_settings_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsRead"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update Settings",
+        "description": "Change the export-limit setting to a positive whole number (AC-019, AC-020).\n\n`SettingsUpdate`'s own field constraints reject a non-positive or non-integer\nvalue with a 422 before this body ever runs.",
+        "operationId": "update_settings_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Export limit must be a positive whole number."
           }
         }
       }
@@ -340,6 +395,35 @@
         ],
         "title": "NoteRead",
         "description": "A saved note, as returned by POST /notes (AC-001)."
+      },
+      "SettingsRead": {
+        "properties": {
+          "exportLimit": {
+            "type": "integer",
+            "title": "Exportlimit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exportLimit"
+        ],
+        "title": "SettingsRead",
+        "description": "The current export-limit setting, as returned by GET /settings (AC-018)."
+      },
+      "SettingsUpdate": {
+        "properties": {
+          "exportLimit": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Exportlimit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exportLimit"
+        ],
+        "title": "SettingsUpdate",
+        "description": "Request body of PUT /settings (AC-019, AC-020).\n\n`export_limit` must be a positive whole number: `gt=0` rejects zero and negative\nvalues, and the `int` type itself rejects anything that is not a whole number."
       },
       "ValidationError": {
         "properties": {

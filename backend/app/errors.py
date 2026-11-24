@@ -37,3 +37,11 @@ NOTE_NOT_FOUND = ErrorCode(404, "Note not found.")
 # at all, so the caller is told there is nothing to export instead of receiving an
 # empty Markdown file forced on them (AC-015).
 NOTE_EXPORT_EMPTY = ErrorCode(404, "There are no notes to export.")
+
+# PUT /settings: the new export limit is validated by the request model's own field
+# constraints (app.schemas.SettingsUpdate), which FastAPI reports as this status whenever
+# the value is missing, zero, negative, or not a whole number (AC-019). No router code
+# raises this directly -- Pydantic's validation produces the 422 before the handler ever
+# runs -- so this constant documents that response's shape for the OpenAPI document (see
+# `responses=` on the route) rather than being passed to `HTTPException` itself.
+SETTINGS_INVALID = ErrorCode(422, "Export limit must be a positive whole number.")

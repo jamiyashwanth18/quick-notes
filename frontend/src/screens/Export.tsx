@@ -23,7 +23,10 @@ function filenameForToday(): string {
   return `${todayISO()}-notes.md`;
 }
 
-type LimitState = "idle" | "saved" | "error";
+// "invalid" is the client-side rejection of the typed value (AC-019); "apiError" is a
+// save that reached the server and failed there, which is not the same message because
+// the value itself was a perfectly fine positive whole number.
+type LimitState = "idle" | "saving" | "saved" | "invalid" | "apiError";
 type DownloadState = "idle" | "preparing" | "done" | "empty" | "error";
 
 export default function Screen() {
@@ -37,14 +40,50 @@ export default function Screen() {
 
   const rule = `2px solid ${brand.primaryColor}`;
 
-  const saveLimit = (e: React.FormEvent<HTMLFormElement>) => {
+  // The current value comes from the server (AC-018); until it answers, or if it never
+  // does, the field keeps showing the 100 it was initialised with.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let data: { exportLimit: number } | undefined;
+      let apiError: unknown;
+      try {
+        ({ data, error: apiError } = await api.GET("/settings"));
+      } catch {
+        apiError = true;
+      }
+      if (cancelled || apiError || !data) return;
+      setLimitInput(String(data.exportLimit));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveLimit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (limitState === "saving") return;
     const raw = limitInput.trim();
-    // A positive whole number only: no zero, no decimals, no sign.
+    // A positive whole number only: no zero, no decimals, no sign (AC-019).
     if (!/^[1-9]\d*$/.test(raw)) {
-      setLimitState("error");
+      setLimitState("invalid");
       return;
     }
+    setLimitState("saving");
+    let data: { exportLimit: number } | undefined;
+    let apiError: unknown;
+    try {
+      ({ data, error: apiError } = await api.PUT("/settings", {
+        body: { exportLimit: Number(raw) },
+      }));
+    } catch {
+      apiError = true;
+    }
+    if (apiError || !data) {
+      setLimitState("apiError");
+      return;
+    }
+    setLimitInput(String(data.exportLimit));
     setLimitState("saved");
   };
 
@@ -150,9 +189,14 @@ export default function Screen() {
                 setLimitState("idle");
               }}
               aria-describedby="export-limit-status"
-              aria-invalid={limitState === "error" ? "true" : undefined}
+              aria-invalid={
+                limitState === "invalid" || limitState === "apiError" ? "true" : undefined
+              }
               style={{
-                border: limitState === "error" ? `2px solid ${brand.accentColor}` : rule,
+                border:
+                  limitState === "invalid" || limitState === "apiError"
+                    ? `2px solid ${brand.accentColor}`
+                    : rule,
                 borderRadius: brand.radius,
               }}
             />
@@ -160,10 +204,12 @@ export default function Screen() {
           <Button
             type="submit"
             data-testid="save-limit-btn"
+            disabled={limitState === "saving"}
+            aria-busy={limitState === "saving" ? "true" : undefined}
             className="h-10 px-5 text-xs font-bold uppercase tracking-[0.14em] text-white"
             style={{ backgroundColor: brand.primaryColor, borderRadius: brand.radius }}
           >
-            Save limit
+            {limitState === "saving" ? "Saving…" : "Save limit"}
           </Button>
         </div>
         <p
@@ -178,10 +224,16 @@ export default function Screen() {
               Export limit saved
             </span>
           )}
-          {limitState === "error" && (
+          {limitState === "invalid" && (
             <span className="inline-flex items-center gap-1.5" style={{ color: brand.accentColor }}>
               <Icons.AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
               Enter a positive whole number
+            </span>
+          )}
+          {limitState === "apiError" && (
+            <span className="inline-flex items-center gap-1.5" style={{ color: brand.accentColor }}>
+              <Icons.AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+              Could not save the export limit. Try again.
             </span>
           )}
         </p>

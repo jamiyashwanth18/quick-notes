@@ -50,3 +50,19 @@ class NoteRead(ApiModel):
     title: str
     body: str
     created_at: datetime
+
+
+class SettingsRead(ApiModel):
+    """The current export-limit setting, as returned by GET /settings (AC-018)."""
+
+    export_limit: int
+
+
+class SettingsUpdate(ApiModel):
+    """Request body of PUT /settings (AC-019, AC-020).
+
+    `export_limit` must be a positive whole number: `gt=0` rejects zero and negative
+    values, and the `int` type itself rejects anything that is not a whole number.
+    """
+
+    export_limit: int = Field(gt=0)

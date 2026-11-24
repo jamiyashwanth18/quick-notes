@@ -1,9 +1,9 @@
 """Assemble the shared notes into one Markdown export document (US-005.1).
 
-The approved data model for this story only ships the `notes` table: the
-`settings` entity that would let a visitor change the export limit belongs to a
-later story, so this module reads a fixed `EXPORT_LIMIT` until that story gives
-it somewhere to read the value from instead.
+`export_notes_document` takes its `limit` as a parameter rather than reading the
+`settings` table itself: the caller (the export route, app.routers.notes) reads the
+current export-limit setting (US-007) and passes it in, so this module and its tests
+stay free of any dependency on the settings entity.
 """
 
 from dataclasses import dataclass
@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.models import Note
 
-# The most recent notes an export ever includes (AC-013). No settings entity ships
-# with this story, so this is a fixed value rather than one read from the database.
+# The default number of most recent notes an export includes (AC-013), and this
+# module's own default for `limit` below. The live export route overrides it with
+# the current export-limit setting (AC-019); this constant is what a caller gets
+# when it does not.
 EXPORT_LIMIT = 100
 
 

@@ -18,6 +18,7 @@ from app.errors import NOTE_EXPORT_EMPTY, NOTE_INVALID, NOTE_NOT_FOUND
 from app.models import Note
 from app.schemas import NoteCreate, NoteRead
 from app.services.export import export_notes_document
+from app.services.settings import get_settings_record
 
 router = APIRouter(prefix="/notes", tags=["Notes"])
 
@@ -119,9 +120,12 @@ def export_notes(session: Annotated[Session, Depends(get_db)]) -> Response:
     than downloading an empty file nobody asked for (AC-015). Otherwise the file is
     returned with its date-derived filename on `Content-Disposition` (AC-014), so the
     browser downloads it under that name with no email or cloud delivery involved
-    (AC-013).
+    (AC-013). The number of notes included is whatever the export-limit setting
+    currently holds (AC-019), not a fixed value, so changing it through PUT /settings
+    changes the next export without anything else here having to change.
     """
-    document = export_notes_document(session)
+    export_limit = get_settings_record(session).export_limit
+    document = export_notes_document(session, limit=export_limit)
     if document is None:
         raise HTTPException(status_code=NOTE_EXPORT_EMPTY.status, detail=NOTE_EXPORT_EMPTY.message)
     return Response(

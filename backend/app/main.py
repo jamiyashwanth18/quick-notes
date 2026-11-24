@@ -17,7 +17,7 @@ from sqlalchemy import inspect
 
 from app import auth
 from app.database import DATABASE_URL, engine
-from app.routers import notes
+from app.routers import notes, settings
 from app.seed import seed_from_env
 
 _ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
@@ -92,6 +92,7 @@ app.add_middleware(
 )
 app.include_router(auth.router)
 app.include_router(notes.router)
+app.include_router(settings.router)
 
 
 @app.get("/health")

@@ -81,7 +81,9 @@ export interface paths {
          *     than downloading an empty file nobody asked for (AC-015). Otherwise the file is
          *     returned with its date-derived filename on `Content-Disposition` (AC-014), so the
          *     browser downloads it under that name with no email or cloud delivery involved
-         *     (AC-013).
+         *     (AC-013). The number of notes included is whatever the export-limit setting
+         *     currently holds (AC-019), not a fixed value, so changing it through PUT /settings
+         *     changes the next export without anything else here having to change.
          */
         get: operations["export_notes_notes_export_get"];
         put?: never;
@@ -111,6 +113,33 @@ export interface paths {
          *     silently, so a caller retrying a stale id finds out it is gone.
          */
         delete: operations["delete_note_notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings
+         * @description Return the current export-limit setting, defaulting to 100 (AC-018).
+         */
+        get: operations["get_settings_settings_get"];
+        /**
+         * Update Settings
+         * @description Change the export-limit setting to a positive whole number (AC-019, AC-020).
+         *
+         *     `SettingsUpdate`'s own field constraints reject a non-positive or non-integer
+         *     value with a 422 before this body ever runs.
+         */
+        put: operations["update_settings_settings_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -195,6 +224,25 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+        };
+        /**
+         * SettingsRead
+         * @description The current export-limit setting, as returned by GET /settings (AC-018).
+         */
+        SettingsRead: {
+            /** Exportlimit */
+            exportLimit: number;
+        };
+        /**
+         * SettingsUpdate
+         * @description Request body of PUT /settings (AC-019, AC-020).
+         *
+         *     `export_limit` must be a positive whole number: `gt=0` rejects zero and negative
+         *     values, and the `int` type itself rejects anything that is not a whole number.
+         */
+        SettingsUpdate: {
+            /** Exportlimit */
+            exportLimit: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -378,6 +426,57 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_settings_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsRead"];
+                };
+            };
+        };
+    };
+    update_settings_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsRead"];
+                };
+            };
+            /** @description Export limit must be a positive whole number. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
