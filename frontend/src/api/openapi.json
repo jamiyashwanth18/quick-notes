@@ -132,6 +132,45 @@
         }
       }
     },
+    "/notes/{note_id}": {
+      "delete": {
+        "tags": [
+          "Notes"
+        ],
+        "summary": "Delete Note",
+        "description": "Permanently delete one note from the shared store (AC-009, AC-010, AC-012).\n\nAny visitor may delete any note (NFR-001): there is no owner check. A missing or\nalready-deleted id raises the 404 this route advertises rather than succeeding\nsilently, so a caller retrying a stale id finds out it is gone.",
+        "operationId": "delete_note_notes__note_id__delete",
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Note Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Note not found."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",

@@ -141,8 +141,8 @@ export default function Screen() {
     // local state.
     let apiError;
     try {
-      ({ error: apiError } = await api.DELETE("/notes/{id}", {
-        params: { path: { id: selectedNote.id } },
+      ({ error: apiError } = await api.DELETE("/notes/{note_id}", {
+        params: { path: { note_id: selectedNote.id } },
       }));
     } catch {
       apiError = true;
