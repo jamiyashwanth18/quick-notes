@@ -1,6 +1,6 @@
 """Routes for /notes.
 
-Sprint 1 ships creation only (POST /notes); listing follows in a later work item.
+Sprint 1 ships creation (POST /notes) and the shared listing (GET /notes).
 Request and response shapes come from app.schemas, the error codes from app.errors,
 so the OpenAPI document carries the full contract.
 """
@@ -17,6 +17,16 @@ from app.models import Note
 from app.schemas import NoteCreate, NoteRead
 
 router = APIRouter(prefix="/notes", tags=["Notes"])
+
+
+def list_note_records(session: Session) -> list[Note]:
+    """Return every note in the shared store, newest-created-first (AC-005, AC-006).
+
+    There is no per-user or per-browser separation (NFR-002): this is the one shared
+    list every visitor reads, ordered by `created_at` descending so the note created
+    last is first regardless of which visitor or device created it.
+    """
+    return list(session.query(Note).order_by(Note.created_at.desc()).all())
 
 
 def create_note_record(session: Session, body: NoteCreate) -> Note:
@@ -47,3 +57,14 @@ def create_note(body: NoteCreate, session: Annotated[Session, Depends(get_db)]) 
     """
     note = create_note_record(session, body)
     return NoteRead.model_validate(note)
+
+
+@router.get(
+    "",
+    response_model=list[NoteRead],
+    status_code=status.HTTP_200_OK,
+)
+def list_notes(session: Annotated[Session, Depends(get_db)]) -> list[NoteRead]:
+    """Return every note in the shared store, newest-created-first (AC-005, AC-006)."""
+    notes = list_note_records(session)
+    return [NoteRead.model_validate(note) for note in notes]

@@ -74,6 +74,30 @@
       }
     },
     "/notes": {
+      "get": {
+        "tags": [
+          "Notes"
+        ],
+        "summary": "List Notes",
+        "description": "Return every note in the shared store, newest-created-first (AC-005, AC-006).",
+        "operationId": "list_notes_notes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NoteRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Notes Notes Get"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "Notes"

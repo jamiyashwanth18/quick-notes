@@ -19,17 +19,19 @@ const BODY_MAX = 2000;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const mix = (colour, percent) => `color-mix(in srgb, ${colour} ${percent}%, transparent)`;
 
-// No listing endpoint yet (sprint 1 ships creation only): the shared list starts
-// empty and only ever holds what this session has saved or what it has deleted
-// back out again.
-const INITIAL_NOTES = [];
-
 const stamp = (d) =>
   `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ` +
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
+const toNote = (n) => ({
+  id: n.id,
+  title: n.title,
+  body: n.body,
+  created_at: stamp(new Date(n.createdAt || n.created_at)),
+});
+
 export default function Screen() {
-  const [notes, setNotes] = React.useState(INITIAL_NOTES);
+  const [notes, setNotes] = React.useState([]);
   const [title, setTitle] = React.useState("");
   const [body, setBody] = React.useState("");
   const [error, setError] = React.useState("");
@@ -39,12 +41,30 @@ export default function Screen() {
   const [confirming, setConfirming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [removed, setRemoved] = React.useState("");
+  const [loadingList, setLoadingList] = React.useState(true);
+  const [listError, setListError] = React.useState("");
 
   const timers = React.useRef([]);
   const titleRef = React.useRef(null);
   const deleteRef = React.useRef(null);
   const confirmRef = React.useRef(null);
   const cancelRef = React.useRef(null);
+
+  const loadNotes = React.useCallback(async () => {
+    setLoadingList(true);
+    const { data, error: apiError } = await api.GET("/notes");
+    setLoadingList(false);
+    if (apiError || !data) {
+      setListError("Could not load notes. Try again.");
+      return;
+    }
+    setListError("");
+    setNotes(data.map(toNote));
+  }, []);
+
+  React.useEffect(() => {
+    loadNotes();
+  }, [loadNotes]);
 
   React.useEffect(() => () => timers.current.forEach(clearTimeout), []);
   React.useEffect(() => {
@@ -83,12 +103,7 @@ export default function Screen() {
       setError("Could not save the note. Try again.");
       return;
     }
-    const note = {
-      id: data.id,
-      title: data.title,
-      body: data.body,
-      created_at: stamp(new Date(data.createdAt || data.created_at)),
-    };
+    const note = toNote(data);
     setNotes((prev) => [note, ...prev]);
     setTitle("");
     setBody("");
@@ -278,7 +293,13 @@ export default function Screen() {
           </p>
         </div>
 
-        {notes.length > 0 ? (
+        {loadingList ? (
+          <p className="py-6 text-xs font-semibold" style={{ color: brand.neutralColor }}>Loading notes…</p>
+        ) : listError ? (
+          <p role="alert" className="py-6 text-xs font-semibold" style={{ color: brand.accentColor }}>{listError}</p>
+        ) : null}
+
+        {!loadingList && !listError && notes.length > 0 ? (
           <ul data-testid="shared-notes-3-list" className="m-0 list-none p-0">
             {notes.map((n) => {
               const isOn = n.id === selected;
@@ -351,7 +372,7 @@ export default function Screen() {
       </div>
 
       {/* Row 7 — empty state */}
-      {notes.length === 0 ? (
+      {notes.length === 0 && !loadingList && !listError ? (
         <div data-testid="no-notes-yet-write-the-first-one-a-empty" className="mt-4 px-6 py-12 text-center" style={{ border: rule, borderRadius: brand.radius }}>
           <FileText className="mx-auto h-6 w-6" aria-hidden="true" />
           <h3 className="mt-3 text-base font-bold tracking-tight" style={{ fontFamily: brand.fontHeading }}>No notes yet. Write the first one above.</h3>
