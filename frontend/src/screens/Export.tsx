@@ -26,6 +26,17 @@ function filenameForToday(): string {
   return `${todayISO()}-notes.md`;
 }
 
+// The server already names the file on its own Content-Disposition header
+// (app/routers/notes.py), derived from its own clock (AC-014); this reads that name
+// back rather than recomputing it from the browser's clock, so the two can never
+// drift apart near midnight. `filenameForToday` above is kept only as a fallback for
+// the unlikely case the header is missing.
+function filenameFromDisposition(disposition: string | null | undefined): string | null {
+  if (!disposition) return null;
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)"?/.exec(disposition);
+  return match ? match[1] : null;
+}
+
 // "invalid" is the client-side rejection of the typed value (AC-019); "apiError" is a
 // save that reached the server and failed there, which is not the same message because
 // the value itself was a perfectly fine positive whole number.
@@ -124,7 +135,9 @@ export default function Screen() {
       return;
     }
 
-    const filename = filenameForToday();
+    const filename =
+      filenameFromDisposition(response?.headers.get("content-disposition")) ??
+      filenameForToday();
     const blob = new Blob([data], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
