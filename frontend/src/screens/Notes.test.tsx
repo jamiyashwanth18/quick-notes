@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import Screen from "./Notes";
 import { api } from "@/api/client";
+import { clearSessionToken } from "@/lib/api";
 
 vi.mock("@/api/client", () => ({
   api: { GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn() },
@@ -318,5 +319,74 @@ describe("Notes screen", () => {
     // No undo or trash affordance is offered anywhere on the screen.
     expect(screen.queryByText(/undo/i, { selector: "button" })).not.toBeInTheDocument();
     expect(screen.queryByText(/trash/i, { selector: "button" })).not.toBeInTheDocument();
+  });
+
+  it("[AC-021] shows no payment or subscription prompt while creating, listing or deleting notes", async () => {
+    const existing = {
+      id: crypto.randomUUID(),
+      title: "Free to use",
+      body: "No billing anywhere.",
+      createdAt: "2026-11-25T14:32:00Z",
+    };
+    mockGet.mockResolvedValue({ data: [existing], error: undefined, response: new Response() });
+    mockPost.mockResolvedValue({
+      data: {
+        id: crypto.randomUUID(),
+        title: "Another free note",
+        body: "",
+        createdAt: "2026-11-25T15:00:00Z",
+      },
+      error: undefined,
+      response: new Response(),
+    });
+    mockDelete.mockResolvedValue({ data: undefined, error: undefined, response: new Response() });
+
+    render(<Screen />);
+
+    const list = await screen.findByTestId("shared-notes-3-list");
+    expect(list).toHaveTextContent("Free to use");
+
+    // Create a note: no payment step appears before or after it is saved.
+    fireEvent.change(screen.getByTestId("title-required-max-100-characters-input"), {
+      target: { value: "Another free note" },
+    });
+    fireEvent.click(screen.getByTestId("save-note-btn"));
+    await screen.findByText(/Saved/);
+
+    // Delete a note: no payment step appears before, during or after the confirmation.
+    fireEvent.click(screen.getByLabelText("Free to use"));
+    fireEvent.click(screen.getByTestId("delete-note-btn"));
+    await screen.findByTestId("delete-this-note-this-cannot-be-un-modal");
+    fireEvent.click(screen.getByText("Delete permanently"));
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("delete-this-note-this-cannot-be-un-modal"),
+      ).not.toBeInTheDocument();
+    });
+
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).not.toMatch(/pay|subscri|billing|credit card|upgrade|premium|checkout/i);
+  });
+
+  it("[AC-022] loads the single shared global list directly on render, with no sign-in step", async () => {
+    clearSessionToken();
+    const note = {
+      id: crypto.randomUUID(),
+      title: "Visible everywhere",
+      body: "Same note on every device.",
+      createdAt: "2026-11-25T14:32:00Z",
+    };
+    mockGet.mockResolvedValue({ data: [note], error: undefined, response: new Response() });
+
+    render(<Screen />);
+
+    expect(mockGet).toHaveBeenCalledWith("/notes");
+    expect(await screen.findByTestId("shared-notes-3-list")).toHaveTextContent(
+      "Visible everywhere",
+    );
+    // No login form or credential field appears anywhere, before or after the list loads.
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sign in/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/log in/i)).not.toBeInTheDocument();
   });
 });
