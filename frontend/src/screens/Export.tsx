@@ -13,7 +13,15 @@ const { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Input
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { Download } = Icons;
 
-const TODAY = "2026-11-25";
+// Derived from the system clock, not a fixed string, so the filename always names the
+// day the file is actually built on (AC-014), not the day this screen was written.
+const todayISO = () => {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + mm + "-" + dd;
+};
+const TODAY = todayISO();
 const FILENAME = TODAY + "-notes.md";
 const SYNCED_AT = "14:18";
 const DEFAULT_LIMIT = 100;
@@ -139,10 +147,24 @@ export default function Screen() {
     if (notes.length === 0 || downloadState === "preparing") return;
     setDownloadState("preparing");
     later(() => {
+      const exportNotes = notes.slice(0, savedLimit);
+      const fileText = buildMarkdown(exportNotes);
+      // Actually hand the file to the browser: a Blob + a throwaway object URL and
+      // anchor, clicked once and revoked straight after, rather than only describing
+      // a file that was never written.
+      const blob = new Blob([fileText], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = FILENAME;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       setReceipt({
         file: FILENAME,
-        count: Math.min(notes.length, savedLimit),
-        size: (buildMarkdown(notes.slice(0, savedLimit)).length / 1024).toFixed(1),
+        count: exportNotes.length,
+        size: (fileText.length / 1024).toFixed(1),
         at: clockNow(),
       });
       setDownloadState("done");

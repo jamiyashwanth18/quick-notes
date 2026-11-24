@@ -27,3 +27,8 @@ NOTE_INVALID = ErrorCode(
     422,
     "Title is required and must be 1 to 100 characters; body must be 2,000 characters or fewer.",
 )
+
+# DELETE /notes/{id}: raised directly by the router when no note with that id exists
+# in the shared store (AC-010's counterpart -- deleting an id that is already gone, or
+# was never there, must not silently succeed).
+NOTE_NOT_FOUND = ErrorCode(404, "Note not found.")

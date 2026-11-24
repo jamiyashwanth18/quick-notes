@@ -39,6 +39,7 @@ export default function Screen() {
   const [confirming, setConfirming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [removed, setRemoved] = React.useState("");
+  const [deleteError, setDeleteError] = React.useState("");
   const [loadingList, setLoadingList] = React.useState(true);
   const [listError, setListError] = React.useState("");
 
@@ -127,21 +128,37 @@ export default function Screen() {
   const closeDialog = () => {
     if (deleting) return;
     setConfirming(false);
+    setDeleteError("");
     if (deleteRef.current) deleteRef.current.focus();
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!selectedNote || deleting) return;
     setDeleting(true);
-    after(400, () => {
-      setNotes((prev) => prev.filter((n) => n.id !== selectedNote.id));
-      setDeleting(false);
-      setConfirming(false);
-      setSelected(null);
-      setSaved("");
-      setRemoved("Note deleted permanently. There is no undo.");
-      if (deleteRef.current) deleteRef.current.focus();
-    });
+    setDeleteError("");
+    // Deleting is a real, shared action (DELETE /notes/{id}): it has to reach the
+    // server so every other visitor's list loses the note too, not just this tab's
+    // local state.
+    let apiError;
+    try {
+      ({ error: apiError } = await api.DELETE("/notes/{id}", {
+        params: { path: { id: selectedNote.id } },
+      }));
+    } catch {
+      apiError = true;
+    }
+    setDeleting(false);
+    if (apiError) {
+      setDeleteError("Could not delete the note. Try again.");
+      return;
+    }
+    setNotes((prev) => prev.filter((n) => n.id !== selectedNote.id));
+    setConfirming(false);
+    setSelected(null);
+    setSaved("");
+    setDeleteError("");
+    setRemoved("Note deleted permanently. There is no undo.");
+    if (deleteRef.current) deleteRef.current.focus();
   };
 
   const trap = (e) => {
@@ -151,8 +168,9 @@ export default function Screen() {
       return;
     }
     if (e.key !== "Tab") return;
-    const first = confirmRef.current;
-    const last = cancelRef.current;
+    // DOM order is Cancel then Delete, so the trap must wrap in that order too.
+    const first = cancelRef.current;
+    const last = confirmRef.current;
     if (!first || !last) return;
     if (e.shiftKey && document.activeElement === first) {
       e.preventDefault();
@@ -462,6 +480,7 @@ export default function Screen() {
             onClick={() => {
               setConfirming(true);
               setRemoved("");
+              setDeleteError("");
             }}
             className="qn-f inline-flex h-10 w-full items-center justify-center gap-2 px-4 text-xs font-bold uppercase tracking-[0.14em] transition-colors duration-150 hover:bg-black/[0.04] disabled:opacity-30 disabled:hover:bg-transparent md:w-auto"
             style={{ border: rule, borderRadius: brand.radius }}
@@ -539,6 +558,16 @@ export default function Screen() {
               “{selectedNote.title}” — {selectedNote.created_at}. It disappears from the shared list
               for every visitor. There is no trash and no undo.
             </p>
+            {deleteError ? (
+              <p
+                role="alert"
+                className="mt-3 flex items-start gap-1.5 text-xs font-semibold"
+                style={{ color: brand.accentColor }}
+              >
+                <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{deleteError}</span>
+              </p>
+            ) : null}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 data-wf="i-7-0-1"
