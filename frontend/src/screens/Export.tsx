@@ -12,11 +12,14 @@ const DEFAULT_LIMIT = 100;
 
 // Derived from the system clock, not a fixed string, so the filename always names the
 // day the file is actually built on (AC-014), not the day this screen was written.
+// Uses UTC, like the backend's own `datetime.now(UTC).date()` (app/services/export.py),
+// so the filename offered here always matches the one the server already put on the
+// download's Content-Disposition header, with no drift near local midnight.
 function todayISO(): string {
   const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${mm}-${dd}`;
 }
 
 function filenameForToday(): string {

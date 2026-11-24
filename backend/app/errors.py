@@ -36,7 +36,7 @@ NOTE_NOT_FOUND = ErrorCode(404, "Note not found.")
 # GET /notes/export: raised directly by the router when the shared store has no notes
 # at all, so the caller is told there is nothing to export instead of receiving an
 # empty Markdown file forced on them (AC-015).
-NOTE_EXPORT_EMPTY = ErrorCode(404, "There are no notes to export.")
+NOTE_EXPORT_EMPTY = ErrorCode(404, "There is nothing to export yet.")
 
 # PUT /settings: the new export limit is validated by the request model's own field
 # constraints (app.schemas.SettingsUpdate), which FastAPI reports as this status whenever
