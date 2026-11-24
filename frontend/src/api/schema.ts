@@ -66,6 +66,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notes/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Notes
+         * @description Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-015).
+         *
+         *     Raises `NOTE_EXPORT_EMPTY` (404) when the shared store has no notes at all, rather
+         *     than downloading an empty file nobody asked for (AC-015). Otherwise the file is
+         *     returned with its date-derived filename on `Content-Disposition` (AC-014), so the
+         *     browser downloads it under that name with no email or cloud delivery involved
+         *     (AC-013). The number of notes included is whatever the export-limit setting
+         *     currently holds (AC-019), not a fixed value, so changing it through PUT /settings
+         *     changes the next export without anything else here having to change.
+         */
+        get: operations["export_notes_notes_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Note
+         * @description Permanently delete one note from the shared store (AC-009, AC-010, AC-012).
+         *
+         *     Any visitor may delete any note (NFR-001): there is no owner check. A missing or
+         *     already-deleted id raises the 404 this route advertises rather than succeeding
+         *     silently, so a caller retrying a stale id finds out it is gone.
+         */
+        delete: operations["delete_note_notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings
+         * @description Return the current export-limit setting, defaulting to 100 (AC-018).
+         */
+        get: operations["get_settings_settings_get"];
+        /**
+         * Update Settings
+         * @description Change the export-limit setting to a positive whole number (AC-019, AC-020).
+         *
+         *     `SettingsUpdate`'s own field constraints reject a non-positive or non-integer
+         *     value with a 422 before this body ever runs.
+         */
+        put: operations["update_settings_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -145,6 +224,25 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+        };
+        /**
+         * SettingsRead
+         * @description The current export-limit setting, as returned by GET /settings (AC-018).
+         */
+        SettingsRead: {
+            /** Exportlimit */
+            exportLimit: number;
+        };
+        /**
+         * SettingsUpdate
+         * @description Request body of PUT /settings (AC-019, AC-020).
+         *
+         *     `export_limit` must be a positive whole number: `gt=0` rejects zero and negative
+         *     values, and the `int` type itself rejects anything that is not a whole number.
+         */
+        SettingsUpdate: {
+            /** Exportlimit */
+            exportLimit: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -260,6 +358,120 @@ export interface operations {
                 };
             };
             /** @description Title is required and must be 1 to 100 characters; body must be 2,000 characters or fewer. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    export_notes_notes_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A single Markdown (.md) file assembled from the most recent notes, up to the export limit, with a filename derived from today's date (AC-013, AC-014). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": string;
+                };
+            };
+            /** @description There are no notes to export. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_note_notes__note_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Note not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_settings_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsRead"];
+                };
+            };
+        };
+    };
+    update_settings_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsRead"];
+                };
+            };
+            /** @description Export limit must be a positive whole number. */
             422: {
                 headers: {
                     [name: string]: unknown;

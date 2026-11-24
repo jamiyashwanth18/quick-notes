@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.database import Base
 from app.models import Note
-from app.routers.notes import list_note_records
+from app.routers.notes import delete_note_record, list_note_records
+from app.services.export import EXPORT_LIMIT, export_notes_document
 
 
 @pytest.fixture
@@ -67,3 +68,86 @@ def test_ac006_a_single_note_appears_alone_at_the_top(session: Session) -> None:
     notes = list_note_records(session)
 
     assert [note.id for note in notes] == [only.id]
+
+
+def test_ac010_deletes_a_note_and_it_no_longer_appears_in_the_store(session: Session) -> None:
+    note = _make_note(session, "To be deleted", datetime(2026, 1, 1, tzinfo=UTC))
+
+    deleted = delete_note_record(session, note.id)
+
+    assert deleted is True
+    assert session.get(Note, note.id) is None
+    assert list_note_records(session) == []
+
+
+def test_ac010_leaves_other_notes_in_the_shared_store_untouched(session: Session) -> None:
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    keep = _make_note(session, "Keep me", base)
+    remove = _make_note(session, "Remove me", base + timedelta(minutes=1))
+
+    deleted = delete_note_record(session, remove.id)
+
+    assert deleted is True
+    notes = list_note_records(session)
+    assert [note.id for note in notes] == [keep.id]
+
+
+def test_ac010_returns_false_when_the_note_does_not_exist(session: Session) -> None:
+    deleted = delete_note_record(session, str(uuid4()))
+
+    assert deleted is False
+
+
+def test_ac012_once_deleted_a_note_cannot_be_recovered_by_a_second_delete(
+    session: Session,
+) -> None:
+    note = _make_note(session, "Gone for good", datetime(2026, 1, 1, tzinfo=UTC))
+
+    first = delete_note_record(session, note.id)
+    second = delete_note_record(session, note.id)
+
+    assert first is True
+    assert second is False
+    assert session.get(Note, note.id) is None
+
+
+def test_ac016_the_default_export_limit_is_100() -> None:
+    # The export limit setting's default (AC-016) is 100 notes.
+    assert EXPORT_LIMIT == 100
+
+
+def test_ac016_exports_only_the_100_most_recent_notes_when_there_are_more(
+    session: Session,
+) -> None:
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    excess = 5
+    total = EXPORT_LIMIT + excess
+    notes = [
+        _make_note(session, f"Note-{i:04d}-end", base + timedelta(minutes=i)) for i in range(total)
+    ]
+
+    # The export limit setting is at its default of 100 (AC-016): no `limit` override.
+    document = export_notes_document(session)
+
+    assert document is not None
+    excluded = notes[:excess]
+    included = notes[excess:]
+    assert len(included) == EXPORT_LIMIT
+    for note in excluded:
+        assert note.title not in document.content
+    for note in included:
+        assert note.title in document.content
+
+
+def test_ac017_exports_every_note_when_there_are_fewer_than_the_limit(
+    session: Session,
+) -> None:
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    notes = [_make_note(session, f"Few {i}", base + timedelta(minutes=i)) for i in range(3)]
+    assert len(notes) < EXPORT_LIMIT
+
+    document = export_notes_document(session)
+
+    assert document is not None
+    for note in notes:
+        assert note.title in document.content
