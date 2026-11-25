@@ -14,11 +14,13 @@ Push to `main` to run `.github/workflows/deploy.yml`, or start a deployment from
 <!-- sdlc:auto:start rollback -->
 Redeploy the last good version from the platform's Deployment tab, or revert the offending commit on `main` — the workflow redeploys.
 
-**Last live version:** e26f9462b58f (`e26f946`)
+**Last live version:** b1d4f76f538b (`b1d4f76`)
 <!-- sdlc:auto:end rollback -->
 
 <!-- sdlc:auto:start recent-failures -->
-_No failed deployments recorded._
+| Date | Version | Summary |
+|---|---|---|
+| 2026-11-25 | 23a353740257 | The deploy workflow did not finish successfully. Its log on GitHub says what stopped it. |
 <!-- sdlc:auto:end recent-failures -->
 
 ## Contacts and escalation
