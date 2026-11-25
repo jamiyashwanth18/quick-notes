@@ -136,8 +136,7 @@ export default function Screen() {
     }
 
     const filename =
-      filenameFromDisposition(response?.headers.get("content-disposition")) ??
-      filenameForToday();
+      filenameFromDisposition(response?.headers.get("content-disposition")) ?? filenameForToday();
     const blob = new Blob([data], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -263,7 +262,7 @@ export default function Screen() {
       >
         <CardHeader>
           <CardTitle style={{ color: brand.primaryColor }}>
-            One Markdown file, named from today&rsquo;s date
+            One Markdown file, named from today&apos;s date: {filenameForToday()}
           </CardTitle>
           <CardDescription>
             Downloaded straight to your device. No email, no cloud copy.
