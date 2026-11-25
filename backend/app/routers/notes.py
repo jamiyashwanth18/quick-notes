@@ -14,15 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.errors import NOTE_INVALID, NOTE_NOT_FOUND
+from app.errors import NOTE_EXPORT_EMPTY, NOTE_INVALID, NOTE_NOT_FOUND
 from app.models import Note
 from app.schemas import NoteCreate, NoteRead
-from app.services.export import (
-    ExportDocument,
-    build_markdown,
-    export_notes_document,
-    filename_from_date,
-)
+from app.services.export import export_notes_document
 from app.services.settings import get_settings_record
 
 router = APIRouter(prefix="/notes", tags=["Notes"])
@@ -111,31 +106,28 @@ def list_notes(session: Annotated[Session, Depends(get_db)]) -> list[NoteRead]:
             "description": (
                 "A single Markdown (.md) file assembled from the most recent notes, "
                 "up to the export limit, with a filename derived from today's date "
-                "(AC-013, AC-014). When the shared store has no notes at all, this is "
-                "still a 200 with a Markdown file that simply has no note entries in "
-                "it (AC-017), rather than an error."
+                "(AC-013, AC-014)."
             ),
             "content": {"text/markdown": {"schema": {"type": "string"}}},
         },
+        NOTE_EXPORT_EMPTY.status: {"description": NOTE_EXPORT_EMPTY.message},
     },
 )
 def export_notes(session: Annotated[Session, Depends(get_db)]) -> Response:
-    """Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-017).
+    """Assemble the most recent notes into one Markdown file (AC-013, AC-014, AC-015).
 
     The file is returned with its date-derived filename on `Content-Disposition`
     (AC-014), so the browser downloads it under that name with no email or cloud
     delivery involved (AC-013). The number of notes included is whatever the
     export-limit setting currently holds (AC-019), not a fixed value, so changing it
     through PUT /settings changes the next export without anything else here having
-    to change. When the shared store has no notes at all, the response is still a 200
-    carrying a Markdown file with zero note entries in it (AC-017), rather than an
-    error -- there is always something to download, even if it names nothing.
+    to change. When the shared store has no notes at all, this raises
+    `NOTE_EXPORT_EMPTY` (404) instead of forcing an empty file on the caller (AC-015).
     """
     export_limit = get_settings_record(session).export_limit
     document = export_notes_document(session, limit=export_limit)
     if document is None:
-        today = datetime.now(UTC).date()
-        document = ExportDocument(filename=filename_from_date(today), content=build_markdown([]))
+        raise HTTPException(status_code=NOTE_EXPORT_EMPTY.status, detail=NOTE_EXPORT_EMPTY.message)
     return Response(
         content=document.content,
         media_type="text/markdown",
