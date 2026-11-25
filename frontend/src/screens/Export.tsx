@@ -74,6 +74,31 @@ export default function Screen() {
     };
   }, []);
 
+  // Whether there is anything to export at all is known as soon as the screen opens
+  // (AC-015, AC-017): the visitor should never have to click "Download Markdown" just
+  // to learn there is nothing there. This checks the shared store's note count up
+  // front, independently of the download flow below, and shows the same "Nothing to
+  // export yet" message immediately when it is empty, without firing a download.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let data: unknown[] | undefined;
+      let apiError: unknown;
+      try {
+        ({ data, error: apiError } = await api.GET("/notes"));
+      } catch {
+        apiError = true;
+      }
+      if (cancelled || apiError || !data) return;
+      if (data.length === 0) {
+        setDownloadState("empty");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const saveLimit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (limitState === "saving") return;

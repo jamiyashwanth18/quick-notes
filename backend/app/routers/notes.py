@@ -127,9 +127,7 @@ def export_notes(session: Annotated[Session, Depends(get_db)]) -> Response:
     export_limit = get_settings_record(session).export_limit
     document = export_notes_document(session, limit=export_limit)
     if document is None:
-        raise HTTPException(
-            status_code=NOTE_EXPORT_EMPTY.status, detail=NOTE_EXPORT_EMPTY.message
-        )
+        raise HTTPException(status_code=NOTE_EXPORT_EMPTY.status, detail=NOTE_EXPORT_EMPTY.message)
     return Response(
         content=document.content,
         media_type="text/markdown",

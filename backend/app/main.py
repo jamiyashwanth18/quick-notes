@@ -11,8 +11,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import inspect
 
 from app import auth
@@ -93,6 +96,42 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(notes.router)
 app.include_router(settings.router)
+
+
+def _notes_create_validation_message(exc: RequestValidationError) -> str:
+    """Turn Pydantic's field errors for POST /notes into the one sentence AC-002,
+    AC-003 and AC-004 each ask the caller to see: which field is wrong and why.
+    """
+    parts: list[str] = []
+    for error in exc.errors():
+        loc = error.get("loc", ())
+        field = loc[-1] if loc else ""
+        error_type = error.get("type", "")
+        if field == "title" and error_type in ("string_too_short", "missing"):
+            parts.append("Title is required.")
+        elif field == "title" and error_type == "string_too_long":
+            parts.append("Title must be 100 characters or fewer.")
+        elif field == "body" and error_type == "string_too_long":
+            parts.append("Body must be 2,000 characters or fewer.")
+        else:
+            parts.append(str(error.get("msg", "Invalid input.")))
+    return " ".join(parts) if parts else "Invalid input."
+
+
+@app.exception_handler(RequestValidationError)
+async def notes_create_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """POST /notes reports an invalid title or body as 400 (AC-002, AC-003, AC-004),
+    not FastAPI's default 422; every other route (PUT /settings included) keeps that
+    default 422 response, so only this one path's errors are rewritten here.
+    """
+    if request.url.path == notes.router.prefix and request.method == "POST":
+        return JSONResponse(
+            status_code=400,
+            content={"detail": _notes_create_validation_message(exc)},
+        )
+    return await request_validation_exception_handler(request, exc)
 
 
 @app.get("/health")
